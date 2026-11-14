@@ -294,6 +294,53 @@ export class AudioForge {
   }
 
   /**
+   * IPA transcription of a romanized word with syllable dots and a primary
+   * stress mark (ˈ), using the same syllabification/stress rules as synthesis.
+   * @param {string} romanWord
+   * @param {object} opts - {stressIndex, stress=true}
+   * @returns {string}
+   */
+  toIPA(romanWord, opts = {}) {
+    const phones = this.parseRoman(romanWord);
+    if (phones.length === 0) return '';
+    const langSeed = typeof this.language.seed === 'number' ? this.language.seed : 0;
+    const wordHash = hashString(this._normalizeRoman(romanWord) + '#' + langSeed);
+    const syllables = this._syllabify(phones);
+    const stressIdx = opts.stress === false ? -1 : this._stressIndex(syllables, wordHash, opts);
+    return syllables.map((syl, s) => {
+      const idx = [...syl.onset, syl.nucleusIdx, ...syl.coda].filter((i) => i >= 0);
+      const body = idx.map((i) => phones[i].ipa).join('');
+      return (s === stressIdx && syllables.length > 1 ? 'ˈ' : '') + body;
+    }).join('.');
+  }
+
+  /**
+   * SSML for neural TTS engines (Azure, Amazon Polly, Google Cloud TTS): each
+   * word is wrapped in <phoneme alphabet="ipa"> so a natural voice pronounces
+   * the constructed language from its IPA rather than guessing from spelling.
+   * @param {string|string[]} romanWords
+   * @param {object} opts - {mode:'statement'|'question', lang='en-US',
+   *   voice (optional voice name), pause=110 (ms between words)}
+   * @returns {string}
+   */
+  toSSML(romanWords, opts = {}) {
+    const words = (Array.isArray(romanWords)
+      ? romanWords
+      : String(romanWords).trim().split(/\s+/)
+    ).filter((w) => w.length > 0);
+    const esc = (s) => s.replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+    const pause = opts.pause ?? 110;
+    const body = words
+      .map((w) => `<phoneme alphabet="ipa" ph="${esc(this.toIPA(w))}">${esc(w)}</phoneme>`)
+      .join(`<break time="${pause}ms"/>`);
+    const pitch = opts.mode === 'question' ? '+8%' : '-4%';
+    const inner = `<prosody pitch="${pitch}">${body}</prosody>`;
+    const voiced = opts.voice ? `<voice name="${esc(opts.voice)}">${inner}</voice>` : inner;
+    return `<speak version="1.0" xml:lang="${esc(opts.lang || 'en-US')}">${voiced}</speak>`;
+  }
+
+  /**
    * Encode Float32Array samples (or a synthesizeWord/Sentence result) as a
    * 16-bit PCM mono RIFF WAV file.
    * @returns {Uint8Array}
