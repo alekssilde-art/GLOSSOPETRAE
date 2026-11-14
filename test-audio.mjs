@@ -467,6 +467,27 @@ console.log('Test 8: Node play() guard + describePhone...');
 }
 
 // ---------------------------------------------------------------------------
+// Test 9: IPA + SSML export for neural TTS
+// ---------------------------------------------------------------------------
+
+console.log('Test 9: toIPA / toSSML...');
+{
+  const forge = new AudioForge(lang42);
+  const words = ['ngu', 'shira', 'kana'];
+  for (const w of words) {
+    const ipa = forge.toIPA(w);
+    assert(ipa.length > 0, `toIPA(${w}) non-empty: ${ipa}`);
+    assert(ipa === forge.toIPA(w), `toIPA(${w}) deterministic`);
+  }
+  assert(forge.toIPA('') === '', 'toIPA empty');
+  const ssml = forge.toSSML('shira kana', { mode: 'question', voice: 'en-US-JennyNeural' });
+  assert(ssml.startsWith('<speak') && ssml.endsWith('</speak>'), 'SSML wrapped in <speak>');
+  assert((ssml.match(/<phoneme alphabet="ipa"/g) || []).length === 2, 'SSML has one phoneme per word');
+  assert(ssml.includes('en-US-JennyNeural'), 'SSML includes voice');
+  console.log(`  ${forge.toIPA('shira')}\n  ${ssml}\n`);
+}
+
+// ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
 
